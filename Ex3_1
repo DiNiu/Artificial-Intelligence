@@ -1,0 +1,71 @@
+%% Page 154: Sequential Bayesian Learning
+% f(x)=a0+a1*x, t=f(x,a)+N(0,sigma^2)
+% linear model for regression: y(x,w)=w0+w1*x
+% unknown parameter: w
+clear
+clc
+
+%% data set: {t,x}
+% t=a0+a1*x+N(0,0.2^2)
+len = 100; % data length
+a0 = -0.3;
+a1 = 0.5;
+sigma = 0.2;    % noise data is Gaussian distribution: N(0,0.2^2)
+beta = 1/(sigma^2); % precision = 1/(sigma)^2
+x = unifrnd(-1,1,1,len); % uniform distributed input data: x=U(-1,1)
+f = a0 + a1*x; % original data 
+t = f + normrnd(0,sigma,1,len); % original + noise
+figure, plot(x,t,'.r',x,f,'.g')
+
+%% Sequentially learning:
+% linear regression model: y(x,W)=w0+w1*x=W*phi(x), W=[w0;w1], phi(x)=[1;x] 
+% covariance: inv(S(N+1))=inv(S(N))+beta*phi(x(N))*phi(x(N))' 
+% mean: m(N+1)=S(N+1)*(inv(S(N))*m(N)+beta*phi(x(N))*t(N+1))
+% original prior probability: p(w|alpha)=N(0,alpa^(-1)*I), alpha is the precision, I=eye(2)
+alpha = 2;
+m = zeros(2,1); % initial mean
+S = (1/alpha)*eye(2); % initial covariance
+w0 = linspace(-1,1,100);
+w1 = linspace(-1,1,100);
+[W0, W1] = meshgrid(w0,w1);
+prior = mvnpdf([W0(:) W1(:)],m',S);
+prior = reshape(prior,length(w1),length(w0));
+% figure, surf(w0,w1,prior);
+figure, contour(w0,w1,prior);
+xlabel('w0')
+ylabel('w1')
+title('Data sample N = 0')
+hold on
+
+plot(a0,a1,'rx','LineWidth',2)
+hold off
+y = m(1)+m(2)*x;
+figure, plot(x,y,'r',x,f,'g')
+
+for i=1:len
+    SN = S; % S(N)
+    mN = m; % m(N)
+    phi = [1;x(i)];
+    invS = inv(SN) + beta*(phi*phi'); % S(N+1)^(-1)
+    S = inv(invS); % S(N+1)
+    m = invS\(SN\mN+beta*phi*t(i)); % m(N+1)
+    if(mod(i,10)==0)
+        pdf = mvnpdf([W0(:) W1(:)],m',S);
+        pdf = reshape(pdf,length(w1),length(w0));
+        % figure, surf(w0,w1,pdf);
+        figure, contour(w0,w1,pdf);
+        xlabel('w0')
+        ylabel('w1')
+        title(['Data Sample N=', num2str(i)])
+        hold on
+        plot(a0,a1,'rx','LineWidth',2)
+        hold off
+        
+        figure, plot(x(1:i), t(1:i),'ro')
+        hold on
+        y = m(1)+m(2)*x;
+        plot(x,y,'r',x,f,'g')
+        title(['Data Sample N=', num2str(i)])
+        hold off
+    end
+end
