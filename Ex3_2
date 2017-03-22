@@ -1,0 +1,147 @@
+%% Page 158: Sequential Bayesian Learning
+% f(x)=a0+a1*x, t=f(x,a)+N(0,sigma^2)
+% linear model for regression: y(x,w)=w0+w1*x
+% unknown parameter: w, beta
+clear
+clc
+
+%% data set: {t,x}
+% t=a0+a1*x+N(0,0.2^2)
+len = 200; % data length
+m0 = -0.3;
+m1 = 0.5;
+sigma = 0.1;    % noise data is Gaussian distribution: N(0,0.2^2)
+x = unifrnd(-1,1,1,len); % uniform distributed input data: x=U(-1,1)
+f = m0 + m1*x; % original data 
+t = f + normrnd(0,sigma,1,len); % original + noise
+figure, plot(x,t,'.r',x,f,'.g')
+xlabel('x')
+ylabel('t')
+title('Data Set')
+
+%% Batch learning
+% batch learning is used to verify sequentially learning algorithm
+% initial prior distribution: p(W,beta)=N(W|M0,inv(beta)*S0)Gam(beta|a0,b0)
+% M0=0, S0=I, a0=b0=1  
+% posterior distribution: p(W,beta|tt)=N(W|MN,inv(beta)*SN)Gam(beta|aN,bN)
+% W=[w0;w1], tt=(t1;...;tN)
+% inv(SN) = inv(S0) + tran(PHI)*PHI
+% MN = SN*(inv(S0)*M0+tran(PHI)*tt)
+% aN = a0 + N/2;
+% bN = b0 + 1/2*(tran(M0)*inv(S0)*M0-tran(MN)*inv(SN)*MN+sum(t(n)^2))
+%       -                          -
+%      | phi(0)(x1) ... phi(M-1)(x1)| 
+% PHI =|    .                .      |, M=2 
+%      | phi(0)(xN) ... phi(M-1)(xN)|
+%       -                          -
+% phi(xn) = [phi(0)(xn); ...; phi(M-1)(xn)] = [1,xn] 
+% 
+M0 = zeros(2,1);
+S0 = eye(2);
+a0 = 1;
+b0 = 1;
+
+% PHI = zeros(len, 2);
+% tt = zeros(len,1);
+% for i=1:len
+%     tt(i) = t(i);
+%     PHI(i,:) =[1 x(i)]; 
+% end
+% 
+% % algorithm
+% invSN = inv(S0) + PHI'*PHI;
+% SN = inv(invSN);
+% MN = invSN\(PHI'*tt);
+% aN = a0 + len/2;
+% bN = b0 + 0.5*(sum(tt.^2)-MN'*invSN*MN);
+% 
+% % p(W,beta|tt)=N(W|MN,inv(beta)*SN)Gam(beta|aN,bN)
+% % Gam(beta|aN,bN)
+% beta = gaminv((0.005:0.01:0.995),aN,1/bN);
+% betapdf = gampdf(beta,aN,1/bN);
+% figure, plot(beta, betapdf)
+% xlabel('beta')
+% ylabel('pdf')
+% title(['Batch learning: Data Sample N=', num2str(len)])
+% 
+% % N(W|MN,inv(beta)*SN)
+% Ebeta = aN/bN;
+% w0 = linspace(-1,1,100);
+% w1 = linspace(-1,1,100);
+% [W0, W1] = meshgrid(w0,w1);
+% Wpdf = mvnpdf([W0(:) W1(:)],MN',(bN/aN)*SN);
+% Wpdf = reshape(Wpdf,length(w1),length(w0));
+% % figure, surf(w0,w1,Wpdf);
+% figure, contour(w0,w1,Wpdf);
+% title('Batch learning')
+% hold on
+% plot(m0,m1,'rx','LineWidth',2)
+% hold off
+
+
+%% Sequentially learning:
+% linear regression model: y(x,W)=w0+w1*x=W*phi(x), W=[w0;w1], phi(x)=[1;x] 
+% original prior distribution: p(W,beta)=N(W|M0,inv(beta)*S0)Gam(beta|a0,b0)
+% M0=0, S0=I, a0=b0=1   
+% algorithm:
+% p(W,beta|t(N))=N(W|MN,inv(beta)*SN)Gam(beta|aN,bN)
+% p(W,beta|t(N+1))=N(W|M(N+1),inv(beta)*S(N+1))Gam(beta|a(N+1),b(N+1))
+% inv(S(N+1)) = inv(S(N)) + phi(x(N+1))*phi(x(N+1))'
+% M(N+1) = S(N+1)*(inv(S(N))*M(N)+t(N+1)*phi(x(N+1)))
+% a(N+1) = a(N) + 1/2;
+% b(N+1) = b(N) + 1/2*(M(N)'*inv(S(N))*M(N)-M(N+1)'*inv(S(N+1))*M(N+1)+t(N+1)^2)
+invSSN = S0;
+SMN = M0;
+SaN = a0;
+SbN = b0;
+w0 = linspace(-1,1,100);
+w1 = linspace(-1,1,100);
+[W0, W1] = meshgrid(w0,w1);
+
+for i=1:len
+    phi = [1;x(i)];
+    % algorithm
+    invSSNplus = invSSN + phi*phi';     
+    SMNplus = invSSNplus\(invSSN*SMN+t(i)*phi);
+    SaNplus = SaN + 0.5;
+    SbNplus = SbN + 0.5*(SMN'*invSSN*SMN-SMNplus'*invSSNplus*SMNplus+t(i)^2);
+    % update
+    invSSN = invSSNplus;
+    SMN = SMNplus;
+    SaN = SaNplus;
+    SbN = SbNplus;
+    % plot
+    if(mod(i,len)==0)
+        Sbeta = gaminv((0.005:0.01:0.995),SaNplus,1/SbNplus);
+        Sbetapdf = gampdf(Sbeta,SaNplus,1/SbNplus);
+%         figure, plot(Sbeta,Sbetapdf)
+%         xlabel('beta')
+%         ylabel('pdf')
+%         title(['Sequentially learning: Data Sample N=', num2str(i)])
+
+        ESbeta = SaNplus/SbNplus;
+        SSNplus = inv(invSSNplus);
+        SWpdf = mvnpdf([W0(:) W1(:)],SMNplus',(1/ESbeta)*SSNplus);
+        SWpdf = reshape(SWpdf,length(w1),length(w0));
+        % figure, surf(w0,w1,SWpdf);
+        figure, contour(w0,w1,SWpdf);
+        title(['Sequentially learning: Data Sample N=', num2str(i)])
+        hold on
+        plot(m0,m1,'rx','LineWidth',2)
+        hold off
+        
+        figure, plot(x(1:i), t(1:i),'ro')
+        hold on
+        y = SMNplus(1)+SMNplus(2)*x;
+        plot(x,y,'r',x,f,'g')
+        title(['Data Sample N=', num2str(i)])
+        xlabel('x')
+        ylabel('t, y')
+        hold off
+    end
+ end
+
+
+
+
+
